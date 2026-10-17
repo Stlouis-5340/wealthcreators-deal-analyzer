@@ -103,7 +103,13 @@ ul.verdict-list li{display:grid;grid-template-columns:auto 1fr;gap:8px;align-ite
 footer{padding:20px 0 40px;color:var(--muted);font-size:12.5px}
 .disclaimer{border-top:1px solid var(--line);padding-top:12px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-@media print{.tip,#tipPop,.actions{display:none!important}.step[aria-expanded="false"] .step-body{display:block}}
+.sharebar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0 0}
+.sharebar .primary{padding:10px 18px;font-size:15px}
+.sharebar .ghost{padding:9px 15px;font-size:14px}
+.copymsg{font-weight:700;color:var(--pass);font-size:14px;opacity:0;transition:opacity .2s}
+.copymsg.show{opacity:1}
+.copymsg.err{color:var(--fail)}
+@media print{.tip,#tipPop,.actions,.sharebar{display:none!important}.step[aria-expanded="false"] .step-body{display:block}}
 </style>
 <style>
 #tipPop .pb{margin-top:6px;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,.06);font-size:13px;color:#DCE8E1}
@@ -187,6 +193,11 @@ input::placeholder{color:#A69F8C}
 
   <section id="results" hidden aria-live="polite">
     <div class="card summary" id="summary"></div>
+    <div class="sharebar" id="shareBar">
+      <button type="button" class="primary" id="copyBtn">Copy deal results</button>
+      <button type="button" class="ghost" id="dlBtn">Download as .txt</button>
+      <span class="copymsg" id="copyMsg" role="status" aria-live="polite"></span>
+    </div>
     <div class="steps" id="steps"></div>
   </section>
 </main>
@@ -538,7 +549,85 @@ $("clearBtn").addEventListener("click",function(){
   window.scrollTo({top:0,behavior:"smooth"}); $("price").focus({preventScroll:true}); postHeight();
 });
 
-window.WCDA={analyze:analyze,grade:grade,verdict:verdict,TIPS:TIPS,render:render,state:function(){return state;}};
+/* ---------- copy / download plain-text deal summary ---------- */
+function buildSummaryText(){
+  var st=state; if(!st||!st.o) return "";
+  var i=st.inp,o=st.o,g=st.g,v=verdict(i,o,g),L=[],blankList=[];
+  function has(id){ return raw(id)!==""; }
+  function line(label,val){ L.push(label+": "+val); }
+  var dt=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  L.push("WEALTH CREATORS DEAL ANALYZER"); L.push("Deal summary \u2014 "+dt); L.push("========================================"); L.push("");
+  L.push("INPUTS");
+  line("Purchase price",money(i.price)); line("Units",i.units);
+  line("Monthly rent per unit",money(i.rent)+" ("+money(o.monthlyRent)+"/mo total)");
+  line("Down payment",i.downPct+"% ("+money(o.downPay)+")"); line("Interest rate",i.ratePct+"%"); line("Amortization",i.years+" years");
+  var ex=[["closing","Closing costs + initial repairs",function(){return money(i.closing);}],["vacancy","Vacancy & credit loss",function(){return i.vacancyPct+"%";}],
+    ["taxes","Property taxes",function(){return money(i.taxes)+"/yr";}],["insurance","Insurance",function(){return money(i.insurance)+"/yr";}],
+    ["maint","Maintenance & repairs",function(){return money(i.maint)+"/yr";}],["capex","CapEx reserve",function(){return money(i.capex)+"/yr";}],
+    ["mgmt","Management fee",function(){return i.mgmtPct+"% of EGI ("+money(o.mgmtFee)+"/yr)";}],["other","Utilities, leasing, admin",function(){return money(i.other)+"/yr";}]];
+  ex.forEach(function(e){ if(has(e[0])) line(e[1],e[2]()); else blankList.push(e[1]); });
+  var opt=[];
+  if(has("minCoc")) opt.push(["Minimum cash-on-cash (buy box)",i.minCoc+"%"]);
+  if(has("reservesHave")) opt.push(["Cash reserves after closing",money(i.reservesHave)]);
+  if(has("apprec")) opt.push(["Appreciation",i.apprecPct+"%/yr"]);
+  if(has("land")) opt.push(["Land share of price",i.landPct+"%"]);
+  if(has("land")||i.ptype==="com") opt.push(["Property type",i.ptype==="com"?"Commercial (39 yrs)":"Residential (27.5 yrs)"]);
+  if(has("arv")) opt.push(["After-repair value (ARV)",money(i.arv)]);
+  if(has("rehab")) opt.push(["Repairs (rehab)",money(i.rehab)]);
+  opt.forEach(function(e){ line(e[0],e[1]); });
+  if(blankList.length) line("Left blank (counted as 0)",blankList.join(", "));
+  L.push(""); L.push("KEY RESULTS");
+  line("Gross scheduled income",money(o.gsi)+"/yr"); line("Effective gross income",money(o.egi)+"/yr");
+  line("Operating expenses",money(o.opex)+"/yr"); line("Net operating income (NOI)",money(o.noi)+"/yr");
+  line("Loan amount",money(o.loan)+" (LTV "+pct(o.ltv,0)+")");
+  line("Annual debt service",money(o.debtService)+" ("+money(o.monthlyPI)+"/mo)");
+  line("Cash flow before tax",money(o.cashFlow)+"/yr ("+money(o.cashFlow/12)+"/mo; "+money(o.cfPerDoorMo)+"/door/mo)");
+  line("Cash invested",money(o.cashInvested));
+  line("Cap rate",pct(o.capRate)); line("Cash-on-cash return",pct(o.coc)); line("DSCR",x(o.dscr));
+  line("Gross rent multiplier",isFinite(o.grm)?o.grm.toFixed(2):"n/a"); line("Operating expense ratio",pct(o.oer,1));
+  line("1% rule",money(o.monthlyRent)+"/mo vs "+money(o.onePctTarget)+" target");
+  line("Reserve target (6 mo.)",money(o.reserveTarget));
+  line("Year-1 loan paydown",money(o.paydownY1)); line("Appreciation (yr 1)",money(o.appreciation));
+  line("Total return, year 1",pct(o.totalReturn,1)+" ("+money(o.totalReturnDollars)+")");
+  if(o.hasLand){ line("Depreciation",money(o.depreciation)+"/yr ("+o.deprLife+" yrs)"); line("Taxable income after interest & depreciation",money(o.taxableIncome)); }
+  if(o.flip) line("70% rule max offer",money(o.flip.maxOffer));
+  L.push(""); L.push("CHECKS VS INDUSTRY STANDARD");
+  SCORED.forEach(function(k){ var s2=g[k]; if(!s2) return; L.push("["+LABEL[s2[0]]+"] "+NAMES[k]+": "+s2[1]+(s2[2]?" (Your playbook: "+s2[2]+")":"")); });
+  L.push("");
+  var h3=$("summary").querySelector("h3"), pp=$("summary").querySelector("p");
+  L.push("OVERALL VERDICT: "+LABEL[v.overall]+" \u2014 "+(h3?h3.textContent:""));
+  if(pp) L.push(pp.textContent);
+  L.push(""); L.push("Educational tool only, not financial, tax, legal, or investment advice. Industry standards are typical figures that vary by market, property class, and lender. Verify locally and review with your CPA and attorney before acting.");
+  return L.join("\n").replace(/\u2212/g,"-");
+}
+function flashMsg(text,isErr){ var m=$("copyMsg"); m.textContent=text; m.className="copymsg show"+(isErr?" err":""); clearTimeout(flashMsg.t); flashMsg.t=setTimeout(function(){ m.className="copymsg"+(isErr?" err":""); },2200); }
+function fallbackCopy(text){
+  var ta=document.createElement("textarea"); ta.value=text; ta.setAttribute("readonly","");
+  ta.style.position="fixed"; ta.style.top="0"; ta.style.left="0"; ta.style.opacity="0"; ta.style.pointerEvents="none";
+  document.body.appendChild(ta); ta.focus(); ta.select(); try{ ta.setSelectionRange(0,text.length); }catch(e){}
+  var ok=false; try{ ok=document.execCommand("copy"); }catch(e){ ok=false; }
+  document.body.removeChild(ta); return ok;
+}
+function copyResults(){
+  var text=buildSummaryText(); if(!text) return;
+  function done(ok){ flashMsg(ok?"Copied!":"Couldn't copy. Use Download as .txt instead.",!ok); }
+  if(navigator.clipboard&&window.isSecureContext){
+    navigator.clipboard.writeText(text).then(function(){ done(true); },function(){ done(fallbackCopy(text)); });
+  } else done(fallbackCopy(text));
+}
+function downloadResults(){
+  var text=buildSummaryText(); if(!text) return;
+  try{
+    var blob=new Blob([text],{type:"text/plain;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
+    a.href=url; a.download="wealth-creators-deal-"+new Date().toISOString().slice(0,10)+".txt";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+    flashMsg("Downloaded.");
+  }catch(e){ flashMsg("Download isn't available here. Use Copy instead.",true); }
+}
+$("copyBtn").addEventListener("click",copyResults);
+$("dlBtn").addEventListener("click",downloadResults);
+
+window.WCDA={analyze:analyze,grade:grade,verdict:verdict,TIPS:TIPS,render:render,buildSummaryText:buildSummaryText,state:function(){return state;}};
 })();
 </script>
 </body>
