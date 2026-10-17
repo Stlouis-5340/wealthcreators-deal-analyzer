@@ -44,6 +44,7 @@ details.adv{border:1px dashed var(--line);border-radius:12px;padding:10px 12px;m
 details.adv summary{cursor:pointer;font-weight:700;color:var(--green2);font-size:14px}
 details.adv[open] summary{margin-bottom:12px}
 .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.topactions{margin:4px 0 16px}
 button.primary{background:var(--gold);color:var(--green);border:0;border-radius:999px;padding:12px 22px;font-weight:800;font-size:16px;cursor:pointer;box-shadow:0 2px 0 #9c7d16}
 button.primary:hover{background:var(--gold2)}
 button.ghost{background:transparent;border:1.5px solid var(--green2);color:var(--green2);border-radius:999px;padding:10px 16px;font-weight:700;cursor:pointer}
@@ -128,6 +129,10 @@ input::placeholder{color:#A69F8C}
   <section class="card inputs" aria-labelledby="inTitle">
     <h2 id="inTitle">Your deal</h2>
     <p class="sub">Use your own numbers: the real tax bill, a real insurance quote, and market vacancy, not the seller's pro forma. Fields marked * are required. Any expense you leave blank counts as $0. Want a walkthrough first? Load the example deal.</p>
+    <div class="actions topactions">
+      <button type="button" class="ghost" id="exampleBtn">Load example deal</button>
+      <button type="button" class="ghost" id="clearBtn">Clear / new deal</button>
+    </div>
 
     <fieldset>
       <legend>Property &amp; rent</legend>
@@ -176,8 +181,6 @@ input::placeholder{color:#A69F8C}
 
     <div class="actions">
       <button type="button" class="primary" id="analyzeBtn">Analyze this deal &rarr;</button>
-      <button type="button" class="ghost" id="exampleBtn">Load example deal</button>
-      <button type="button" class="ghost" id="clearBtn">Clear / new deal</button>
     </div>
     <div class="formmsg" id="formMsg" role="alert"></div>
   </section>
